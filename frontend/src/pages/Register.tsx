@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import type { FormEvent, CSSProperties } from 'react';
+import type { FormEvent } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import axios from 'axios';
 import { useToast } from '../context/ToastContext';
 import { validateEmail, validateUsername, validatePassword, validateConfirmPassword } from '../utils/validation';
 import { hashPassword } from '../utils/crypto';
-import { API_BASE } from '../utils/api';
+import { authService } from '../services/authService';
 import Field from '../components/Field';
 
 interface RegisterErrors {
@@ -46,101 +47,74 @@ export default function Register() {
     setLoading(true);
     try {
       const hashedPassword = await hashPassword(password);
-      const res = await fetch(`${API_BASE}/auth/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, email, password: hashedPassword }),
-      });
-
-      const data = await res.json() as { error?: string };
-
-      if (!res.ok) {
-        setPassword('');
-        setConfirmPassword('');
-        addToast(data.error ?? 'Registration failed', 'error');
-        return;
-      }
-
+      await authService.register(username, email, hashedPassword);
       addToast('Account created! Please log in.', 'success');
       navigate('/login');
-    } catch {
+    } catch (err) {
       setPassword('');
       setConfirmPassword('');
-      addToast('Something went wrong. Please try again.', 'error');
+      const msg = axios.isAxiosError(err)
+        ? (err.response?.data as { error?: string })?.error ?? 'Registration failed'
+        : 'Something went wrong. Please try again.';
+      addToast(msg, 'error');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div style={container}>
-      <h1 style={{ marginBottom: '2rem', fontSize: '1.5rem' }}>Register</h1>
-      <form onSubmit={handleSubmit} noValidate style={formStyle}>
-        <Field label="Username" error={errors.username}>
-          <input
-            type="text"
-            value={username}
-            onChange={e => setUsername(e.target.value)}
-            style={inputStyle(!!errors.username)}
-            autoComplete="username"
-          />
-        </Field>
-        <Field label="Email" error={errors.email}>
-          <input
-            type="email"
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-            style={inputStyle(!!errors.email)}
-            autoComplete="email"
-          />
-        </Field>
-        <Field label="Password" error={errors.password}>
-          <input
-            type="password"
-            value={password}
-            onChange={e => setPassword(e.target.value)}
-            style={inputStyle(!!errors.password)}
-            autoComplete="new-password"
-          />
-        </Field>
-        <Field label="Confirm password" error={errors.confirmPassword}>
-          <input
-            type="password"
-            value={confirmPassword}
-            onChange={e => setConfirmPassword(e.target.value)}
-            style={inputStyle(!!errors.confirmPassword)}
-            autoComplete="new-password"
-          />
-        </Field>
-        <button type="submit" disabled={loading} style={submitBtn}>
-          {loading ? 'Registering...' : 'Register'}
-        </button>
-      </form>
-      <p style={{ marginTop: '1.25rem', textAlign: 'center', color: '#888', fontSize: '0.9rem' }}>
-        Already have an account? <Link to="/login">Login</Link>
-      </p>
+    <div style={{ minHeight: 'calc(100vh - 60px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem 1.5rem' }}>
+      <div className="card" style={{ width: '100%', maxWidth: 420, padding: '2.5rem' }}>
+        <div style={{ marginBottom: '2rem' }}>
+          <h1 style={{ fontSize: '1.5rem', fontWeight: 700, letterSpacing: '-0.02em' }}>Create account</h1>
+          <p style={{ color: '#64748b', fontSize: '0.9rem', marginTop: '0.25rem' }}>Start summarizing text with AI</p>
+        </div>
+        <form onSubmit={handleSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: '1.125rem' }}>
+          <Field label="Username" error={errors.username}>
+            <input
+              type="text"
+              value={username}
+              onChange={e => setUsername(e.target.value)}
+              className={`input${errors.username ? ' input--error' : ''}`}
+              autoComplete="username"
+            />
+          </Field>
+          <Field label="Email" error={errors.email}>
+            <input
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              className={`input${errors.email ? ' input--error' : ''}`}
+              autoComplete="email"
+            />
+          </Field>
+          <Field label="Password" error={errors.password}>
+            <input
+              type="password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              className={`input${errors.password ? ' input--error' : ''}`}
+              autoComplete="new-password"
+            />
+          </Field>
+          <Field label="Confirm password" error={errors.confirmPassword}>
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={e => setConfirmPassword(e.target.value)}
+              className={`input${errors.confirmPassword ? ' input--error' : ''}`}
+              autoComplete="new-password"
+            />
+          </Field>
+          <button type="submit" disabled={loading} className="btn btn-primary btn-full" style={{ marginTop: '0.25rem', padding: '0.7rem' }}>
+            {loading ? 'Creating account…' : 'Register'}
+          </button>
+        </form>
+        <p style={{ marginTop: '1.5rem', textAlign: 'center', color: '#64748b', fontSize: '0.875rem' }}>
+          Already have an account?{' '}
+          <Link to="/login" style={{ color: '#6366f1', fontWeight: 500, textDecoration: 'none' }}>Login</Link>
+        </p>
+      </div>
     </div>
   );
 }
-
-const container: CSSProperties = { maxWidth: '400px', margin: '4rem auto', padding: '0 1.5rem' };
-const formStyle: CSSProperties = { display: 'flex', flexDirection: 'column', gap: '1rem' };
-const inputStyle = (hasError: boolean): CSSProperties => ({
-  padding: '0.6rem 0.75rem',
-  fontSize: '0.95rem',
-  borderRadius: '6px',
-  border: `1px solid ${hasError ? '#ef4444' : '#ccc'}`,
-  outline: 'none',
-  width: '100%',
-  boxSizing: 'border-box',
-});
-const submitBtn: CSSProperties = {
-  padding: '0.65rem',
-  backgroundColor: '#6366f1',
-  color: '#fff',
-  border: 'none',
-  borderRadius: '6px',
-  fontSize: '1rem',
-  cursor: 'pointer',
-  marginTop: '0.25rem',
-};

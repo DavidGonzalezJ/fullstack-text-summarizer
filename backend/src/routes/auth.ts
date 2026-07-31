@@ -10,9 +10,29 @@ const AUTH_ERROR = 'Wrong email or password';
 const JWT_SECRET = process.env.JWT_SECRET!;
 const JWT_EXPIRES_IN = (process.env.JWT_EXPIRES_IN ?? '15m') as jwt.SignOptions['expiresIn'];
 const REFRESH_TOKEN_EXPIRES_DAYS = 30;
+const COOKIE_NAME = 'rt';
 
 function generateRefreshToken(): string {
   return randomBytes(64).toString('hex');
+}
+
+function setRefreshCookie(res: Response, token: string): void {
+  res.cookie(COOKIE_NAME, token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    maxAge: REFRESH_TOKEN_EXPIRES_DAYS * 24 * 60 * 60 * 1000,
+    path: '/api/auth',
+  });
+}
+
+function clearRefreshCookie(res: Response): void {
+  res.clearCookie(COOKIE_NAME, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    path: '/api/auth',
+  });
 }
 
 router.post('/register', async (req: Request, res: Response) => {
@@ -95,7 +115,8 @@ router.post('/login', async (req: Request, res: Response) => {
       [user.id, refreshToken, expiresAt]
     );
 
-    res.json({ username: user.username, email: user.email, accessToken, refreshToken });
+    setRefreshCookie(res, refreshToken);
+    res.json({ username: user.username, email: user.email, accessToken });
   } catch (err) {
     console.error('[login]', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -104,10 +125,10 @@ router.post('/login', async (req: Request, res: Response) => {
 
 router.post('/refresh', async (req: Request, res: Response) => {
   try {
-    const { refreshToken } = req.body as { refreshToken?: string };
+    const refreshToken = req.cookies[COOKIE_NAME] as string | undefined;
 
     if (!refreshToken) {
-      res.status(400).json({ error: 'refreshToken is required' });
+      res.status(401).json({ error: 'No refresh token' });
       return;
     }
 
@@ -150,7 +171,8 @@ router.post('/refresh', async (req: Request, res: Response) => {
       { expiresIn: JWT_EXPIRES_IN }
     );
 
-    res.json({ accessToken, refreshToken: newRefreshToken });
+    setRefreshCookie(res, newRefreshToken);
+    res.json({ accessToken });
   } catch (err) {
     console.error('[refresh]', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -159,23 +181,19 @@ router.post('/refresh', async (req: Request, res: Response) => {
 
 router.post('/logout', async (req: Request, res: Response) => {
   try {
-    const { refreshToken } = req.body as { refreshToken?: string };
+    const refreshToken = req.cookies[COOKIE_NAME] as string | undefined;
 
     if (!refreshToken) {
-      res.status(400).json({ error: 'refreshToken is required' });
+      res.status(401).json({ error: 'No refresh token' });
       return;
     }
 
-    const result = await pool.query(
-      'DELETE FROM refresh_tokens WHERE token = $1 RETURNING user_id',
+    await pool.query(
+      'DELETE FROM refresh_tokens WHERE token = $1',
       [refreshToken]
     );
 
-    if ((result.rowCount ?? 0) === 0) {
-      res.status(401).json({ error: 'Invalid refresh token' });
-      return;
-    }
-
+    clearRefreshCookie(res);
     res.json({ message: 'Logged out successfully' });
   } catch (err) {
     console.error('[logout]', err);

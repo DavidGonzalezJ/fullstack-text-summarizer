@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
-import { API_BASE } from '../utils/api';
+import { setAxiosToken } from '../lib/axios';
+import { authService } from '../services/authService';
 
 interface User {
   username: string;
@@ -10,13 +11,12 @@ interface AuthContextType {
   user: User | null;
   accessToken: string | null;
   restoring: boolean;
-  setAuth: (user: User, accessToken: string, refreshToken: string) => void;
+  setAuth: (user: User, accessToken: string) => void;
   logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-const REFRESH_TOKEN_KEY = 'refreshToken';
 const USER_KEY = 'user';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -25,28 +25,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [restoring, setRestoring] = useState(true);
 
   useEffect(() => {
-    const storedRefreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
     const storedUser = localStorage.getItem(USER_KEY);
 
-    if (!storedRefreshToken || !storedUser) {
+    if (!storedUser) {
       setRestoring(false);
       return;
     }
 
-    fetch(`${API_BASE}/auth/refresh`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refreshToken: storedRefreshToken }),
-    })
-      .then(async res => {
-        if (!res.ok) throw new Error('Session expired');
-        const data = await res.json() as { accessToken: string; refreshToken: string };
+    authService.refresh()
+      .then(data => {
         setUser(JSON.parse(storedUser) as User);
         setAccessToken(data.accessToken);
-        localStorage.setItem(REFRESH_TOKEN_KEY, data.refreshToken);
+        setAxiosToken(data.accessToken);
       })
       .catch(() => {
-        localStorage.removeItem(REFRESH_TOKEN_KEY);
         localStorage.removeItem(USER_KEY);
       })
       .finally(() => setRestoring(false));
@@ -55,29 +47,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const clearAuth = useCallback(() => {
     setUser(null);
     setAccessToken(null);
-    localStorage.removeItem(REFRESH_TOKEN_KEY);
+    setAxiosToken(null);
     localStorage.removeItem(USER_KEY);
   }, []);
 
-  const setAuth = useCallback((user: User, accessToken: string, refreshToken: string) => {
+  const setAuth = useCallback((user: User, accessToken: string) => {
     setUser(user);
     setAccessToken(accessToken);
-    localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+    setAxiosToken(accessToken);
     localStorage.setItem(USER_KEY, JSON.stringify(user));
   }, []);
 
   const logout = useCallback(async () => {
-    const storedRefreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
-    if (storedRefreshToken) {
-      try {
-        await fetch(`${API_BASE}/auth/logout`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refreshToken: storedRefreshToken }),
-        });
-      } catch {
-        // Clear locally even if server request fails
-      }
+    try {
+      await authService.logout();
+    } catch {
+      // Clear locally even if server request fails
     }
     clearAuth();
   }, [clearAuth]);

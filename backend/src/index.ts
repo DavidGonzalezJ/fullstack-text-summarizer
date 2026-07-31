@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import { pool, initDb } from './db';
 import authRouter from './routes/auth';
 import summarizeRouter from './routes/summarize';
@@ -7,8 +8,12 @@ import summarizeRouter from './routes/summarize';
 const app = express();
 const PORT = 3001;
 
-app.use(cors());
+app.use(cors({
+  origin: process.env.CORS_ORIGIN ?? 'http://localhost:5173',
+  credentials: true,
+}));
 app.use(express.json());
+app.use(cookieParser());
 
 app.use('/api/auth', authRouter);
 app.use('/api/summarize', summarizeRouter);

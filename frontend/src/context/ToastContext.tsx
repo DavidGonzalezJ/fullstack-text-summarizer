@@ -43,16 +43,22 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         {toasts.map(toast => (
           <div
             key={toast.id}
+            className="toast"
             style={{
-              padding: '0.75rem 1.25rem',
-              borderRadius: '6px',
+              padding: '0.75rem 1.125rem',
+              borderRadius: '10px',
               color: '#fff',
-              backgroundColor: toast.type === 'success' ? '#22c55e' : '#ef4444',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
-              maxWidth: '320px',
-              fontSize: '0.9rem',
+              backgroundColor: toast.type === 'success' ? '#16a34a' : '#dc2626',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.18)',
+              maxWidth: '340px',
+              fontSize: '0.875rem',
+              fontWeight: 500,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
             }}
           >
+            <span>{toast.type === 'success' ? '✓' : '✕'}</span>
             {toast.message}
           </div>
         ))}
