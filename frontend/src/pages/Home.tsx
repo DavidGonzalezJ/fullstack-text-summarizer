@@ -1,12 +1,43 @@
 import { useState } from 'react';
 import type { CSSProperties } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
+import { API_BASE } from '../utils/api';
 
 const MAX_CHARS = 5000;
 
 export default function Home() {
-  const { user, restoring } = useAuth();
+  const { user, restoring, accessToken } = useAuth();
+  const { addToast } = useToast();
   const [text, setText] = useState('');
+  const [summary, setSummary] = useState<string | null>(null);
+  const [summarizing, setSummarizing] = useState(false);
+
+  const handleSummarize = async () => {
+    if (!text.trim()) return;
+    setSummarizing(true);
+    setSummary(null);
+    try {
+      const res = await fetch(`${API_BASE}/summarize`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ text }),
+      });
+      const data = await res.json() as { summary?: string; error?: string };
+      if (!res.ok) {
+        addToast(data.error ?? 'Failed to summarize', 'error');
+        return;
+      }
+      setSummary(data.summary ?? '');
+    } catch {
+      addToast('Something went wrong. Please try again.', 'error');
+    } finally {
+      setSummarizing(false);
+    }
+  };
 
   if (restoring) {
     return <div style={container}><p style={{ color: '#888' }}>Loading...</p></div>;
@@ -50,9 +81,15 @@ export default function Home() {
       }}>
         {text.length.toLocaleString()} / {MAX_CHARS.toLocaleString()}
       </div>
-      <button style={summarizeBtn}>
-        Summarize
+      <button onClick={handleSummarize} disabled={summarizing || !text.trim()} style={summarizeBtn}>
+        {summarizing ? 'Summarizing...' : 'Summarize'}
       </button>
+      {summary !== null && (
+        <div style={summaryBox}>
+          <h2 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '0.5rem', color: '#444' }}>Summary</h2>
+          <p style={{ margin: 0, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{summary}</p>
+        </div>
+      )}
     </div>
   );
 }
@@ -72,4 +109,14 @@ const summarizeBtn: CSSProperties = {
   borderRadius: '8px',
   fontSize: '1rem',
   cursor: 'pointer',
+};
+
+const summaryBox: CSSProperties = {
+  marginTop: '1.5rem',
+  padding: '1rem 1.25rem',
+  borderRadius: '8px',
+  border: '1px solid #d1d5db',
+  backgroundColor: '#f9fafb',
+  fontSize: '0.95rem',
+  color: '#374151',
 };
