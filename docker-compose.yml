@@ -1,0 +1,32 @@
+services:
+  app-frontend:
+    image: summarizer-frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: summarizer-frontend
+    restart: unless-stopped
+
+  app-backend:
+    image: summarizer-backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    env_file:
+      - ./backend/.env.local # secretos: no se incluyen en la imagen
+    environment:
+      - CORS_ORIGIN=http://localhost
+    container_name: summarizer-backend
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:1.29
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - 80:80
+    container_name: summarizer-reverse-proxy
+    restart: unless-stopped
+    depends_on:
+      - app-frontend
+      - app-backend

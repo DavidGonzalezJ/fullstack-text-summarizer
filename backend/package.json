@@ -2,7 +2,9 @@
   "name": "backend",
   "version": "1.0.0",
   "scripts": {
-    "dev": "tsx --env-file=.env.local src/index.ts"
+    "dev": "tsx --env-file=.env.local src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js"
   },
   "dependencies": {
     "@google/genai": "^2.15.0",
