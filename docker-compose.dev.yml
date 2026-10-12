@@ -1,0 +1,36 @@
+services:
+  app-frontend:
+    image: summarizer-frontend-dev
+    build:
+      context: ./frontend
+      dockerfile: dev.Dockerfile
+    environment:
+      - VITE_API_URL=http://localhost:8080/api
+      - CHOKIDAR_USEPOLLING=true # los eventos de archivos no llegan al contenedor desde Windows
+    volumes:
+      - ./frontend:/usr/src/app
+      - /usr/src/app/node_modules # conserva el node_modules de Linux de la imagen
+    container_name: summarizer-frontend-dev
+
+  app-backend:
+    image: summarizer-backend-dev
+    build:
+      context: ./backend
+      dockerfile: dev.Dockerfile
+    environment:
+      - CORS_ORIGIN=http://localhost:8080
+    volumes:
+      - ./backend:/usr/src/app
+      - /usr/src/app/node_modules
+    container_name: summarizer-backend-dev
+
+  nginx:
+    image: nginx:1.29
+    volumes:
+      - ./nginx.dev.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - 8080:80
+    container_name: summarizer-reverse-proxy
+    depends_on:
+      - app-frontend
+      - app-backend
